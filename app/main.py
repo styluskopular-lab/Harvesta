@@ -3,8 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
-from app.core.database import engine, Base
+from app.core.database import engine, Base, SessionLocal
 from app.api.v1 import auth, products, orders, farms, deliveries, shops, weather, veterinary, farm_records, farm_finance
+from app.services.marketplace_seed import seed_marketplace_if_empty
 
 # Import all models so Base knows about them
 from app.models import *  # noqa: F401, F403
@@ -14,6 +15,8 @@ from app.models import *  # noqa: F401, F403
 async def lifespan(app: FastAPI):
     # Startup: create tables
     Base.metadata.create_all(bind=engine)
+    with SessionLocal() as db:
+        seed_marketplace_if_empty(db)
     yield
     # Shutdown (if needed)
 

@@ -28,6 +28,14 @@ def list_products(
     return query.offset(skip).limit(limit).all()
 
 
+@router.get("/farmer/me", response_model=List[ProductRead])
+def my_products(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("farmer", "admin")),
+):
+    return db.query(Product).filter(Product.farmer_id == current_user.id).all()
+
+
 @router.get("/{product_id}", response_model=ProductRead)
 def get_product(product_id: int, db: Session = Depends(get_db)):
     product = db.query(Product).filter(Product.id == product_id).first()
@@ -84,11 +92,3 @@ def delete_product(
     db.delete(product)
     db.commit()
     return None
-
-
-@router.get("/farmer/me", response_model=List[ProductRead])
-def my_products(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("farmer", "admin")),
-):
-    return db.query(Product).filter(Product.farmer_id == current_user.id).all()

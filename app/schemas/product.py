@@ -35,6 +35,8 @@ class ProductUpdate(BaseModel):
 class ProductRead(ProductBase):
     id: int
     farmer_id: int
+    farmer_name: Optional[str] = None
+    farmer_location: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

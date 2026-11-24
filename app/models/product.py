@@ -51,3 +51,13 @@ class Product(Base):
 
     def __repr__(self) -> str:
         return f"<Product {self.name} ({self.quantity} {self.unit})>"
+
+    @property
+    def farmer_name(self) -> str | None:
+        return self.farmer.full_name if self.farmer else None
+
+    @property
+    def farmer_location(self) -> str | None:
+        if not self.farmer:
+            return None
+        return self.farmer.location_name or self.farmer.district

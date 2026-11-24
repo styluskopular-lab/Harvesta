@@ -7,9 +7,9 @@ if str(Path(__file__).resolve().parents[1]) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 try:
-    from streamlit_app.api_config import get_api_url, normalize_api_url
+    from streamlit_app.api_config import sidebar_api_url
 except ImportError:
-    from api_config import get_api_url, normalize_api_url
+    from api_config import sidebar_api_url
 
 st.set_page_config(page_title="Marketplace | Harvesta", page_icon=str(Path(__file__).parents[2] / "harvesta_icon.png"), layout="wide")
 
@@ -19,8 +19,7 @@ if css_path.exists():
 if st.session_state.get("dark_mode", False):
     st.markdown('<style>.stApp{background:#102319!important;color:#edf5ee!important}.stApp h1,.stApp h2,.stApp h3,.stApp p{color:#edf5ee!important}[data-testid="stSidebar"]{background:#13291b!important}.market-card{background:#193424!important;border-color:#294936!important}</style>', unsafe_allow_html=True)
 
-DEFAULT_API_URL = get_api_url()
-API_URL = normalize_api_url(st.sidebar.text_input("API URL", value=DEFAULT_API_URL, key="api_mkt"))
+API_URL = sidebar_api_url()
 
 if "token" not in st.session_state:
     st.session_state.token = None
@@ -81,6 +80,10 @@ else:
                     f'<p>{p["quantity"]:,.0f} {p["unit"]} available</p>',
                     unsafe_allow_html=True,
                 )
+                st.caption(
+                    f"{p.get('farmer_name') or 'Local farmer'} · "
+                    f"{p.get('farmer_location') or 'Uganda'}"
+                )
                 if p.get("description"):
                     st.caption(p["description"][:80])
 
@@ -113,7 +116,7 @@ else:
 
     st.markdown(f"### Total: **UGX {total:,.0f}**")
 
-    address = st.text_input("Delivery Address", placeholder="e.g. Westlands, Nairobi")
+    address = st.text_input("Delivery Address", placeholder="e.g. Nakawa, Kampala, Uganda")
     notes = st.text_area("Notes (optional)")
 
     col_c1, col_c2 = st.columns(2)
@@ -125,6 +128,8 @@ else:
         if st.button("Place Order", type="primary"):
             if not st.session_state.token:
                 st.error("Please log in first (use the Home page sidebar).")
+            elif st.session_state.get("user", {}).get("role") != "buyer":
+                st.error("Only buyer accounts can place orders.")
             elif not address:
                 st.error("Please enter a delivery address.")
             else:

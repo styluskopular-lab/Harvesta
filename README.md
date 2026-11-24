@@ -42,7 +42,9 @@ local SQLite URL for development or a hosted PostgreSQL URL for deployment.
 
 ### 2. Initialize Database
 
-Database tables are created automatically when the API starts. To add demo data:
+Database tables are created automatically when the API starts. If there are no
+available marketplace listings, the API seeds five sample Ugandan produce
+listings with seller districts. To reset or load the full local demo dataset:
 
 ```bash
 python seed_data.py

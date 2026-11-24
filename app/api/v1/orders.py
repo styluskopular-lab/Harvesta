@@ -7,7 +7,13 @@ from app.core.security import get_current_user, require_roles
 from app.models.user import User
 from app.models.product import Product
 from app.models.order import Order, OrderItem, OrderStatus
-from app.schemas.order import OrderCreate, OrderRead, OrderUpdate
+from app.schemas.order import (
+    FarmerOrderItemRead,
+    FarmerOrderRead,
+    OrderCreate,
+    OrderRead,
+    OrderUpdate,
+)
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -16,7 +22,7 @@ router = APIRouter(prefix="/orders", tags=["Orders"])
 def create_order(
     order_in: OrderCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("buyer")),
 ):
     if not order_in.items:
         raise HTTPException(status_code=400, detail="Order must contain at least one item")
@@ -77,6 +83,48 @@ def create_order(
     return order
 
 
+@router.get("/incoming", response_model=List[FarmerOrderRead])
+def incoming_orders(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("farmer", "admin")),
+):
+    rows = (
+        db.query(Order, OrderItem, Product)
+        .join(OrderItem, OrderItem.order_id == Order.id)
+        .join(Product, Product.id == OrderItem.product_id)
+        .filter(Product.farmer_id == current_user.id)
+        .order_by(Order.created_at.desc())
+        .all()
+    )
+
+    orders_by_id = {}
+    for order, item, product in rows:
+        if order.id not in orders_by_id:
+            orders_by_id[order.id] = {
+                "id": order.id,
+                "buyer_id": order.buyer_id,
+                "status": order.status,
+                "total_amount": 0,
+                "delivery_address": order.delivery_address,
+                "notes": order.notes,
+                "created_at": order.created_at,
+                "items": [],
+            }
+        orders_by_id[order.id]["total_amount"] += item.subtotal
+        orders_by_id[order.id]["items"].append(
+            FarmerOrderItemRead(
+                product_id=product.id,
+                product_name=product.name,
+                quantity=item.quantity,
+                unit=product.unit,
+                unit_price=item.unit_price,
+                subtotal=item.subtotal,
+            )
+        )
+
+    return [FarmerOrderRead(**order) for order in orders_by_id.values()]
+
+
 @router.get("/", response_model=List[OrderRead])
 def list_orders(
     db: Session = Depends(get_db),
@@ -84,6 +132,16 @@ def list_orders(
 ):
     if current_user.role == "admin":
         return db.query(Order).order_by(Order.created_at.desc()).all()
+    if current_user.role == "farmer":
+        return (
+            db.query(Order)
+            .join(OrderItem, OrderItem.order_id == Order.id)
+            .join(Product, Product.id == OrderItem.product_id)
+            .filter(Product.farmer_id == current_user.id)
+            .distinct()
+            .order_by(Order.created_at.desc())
+            .all()
+        )
     return (
         db.query(Order)
         .filter(Order.buyer_id == current_user.id)

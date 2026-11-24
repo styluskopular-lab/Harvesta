@@ -7,9 +7,9 @@ if str(Path(__file__).resolve().parents[1]) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 try:
-    from streamlit_app.api_config import get_api_url, normalize_api_url
+    from streamlit_app.api_config import sidebar_api_url
 except ImportError:
-    from api_config import get_api_url, normalize_api_url
+    from api_config import sidebar_api_url
 
 st.set_page_config(page_title="Orders & Deliveries | Harvesta", page_icon=str(Path(__file__).parents[2] / "harvesta_icon.png"), layout="wide")
 
@@ -19,8 +19,7 @@ if css_path.exists():
 if st.session_state.get("dark_mode", False):
     st.markdown('<style>.stApp{background:#102319!important;color:#edf5ee!important}.stApp h1,.stApp h2,.stApp h3,.stApp p{color:#edf5ee!important}[data-testid="stSidebar"]{background:#13291b!important}</style>', unsafe_allow_html=True)
 
-DEFAULT_API_URL = get_api_url()
-API_URL = normalize_api_url(st.sidebar.text_input("API URL", value=DEFAULT_API_URL, key="api_ord"))
+API_URL = sidebar_api_url()
 
 if "token" not in st.session_state or not st.session_state.token:
     st.warning("Please log in first from the Home page.")
@@ -31,7 +30,9 @@ def headers():
 
 st.title("Orders & Deliveries")
 
-tab1, tab2, tab3 = st.tabs(["My Orders", "Deliveries", "Vans"])
+tab1, tab2, tab3, tab4 = st.tabs(
+    ["My Orders", "Incoming Orders", "Deliveries", "Vans"]
+)
 
 with tab1:
     st.subheader("Orders")
@@ -53,9 +54,47 @@ with tab1:
                     st.write(f"**Notes:** {o['notes']}")
                 st.write("**Items:**")
                 for item in o.get("items", []):
-                    st.write(f"- Product ID {item['product_id']}: {item['quantity']} × {item['unit_price']:,.0f} = {item['subtotal']:,.0f}")
+                    product_name = item.get("product_name") or f"Product #{item['product_id']}"
+                    unit = item.get("unit") or "unit"
+                    st.write(
+                        f"- {product_name}: {item['quantity']} {unit} × "
+                        f"UGX {item['unit_price']:,.0f} = UGX {item['subtotal']:,.0f}"
+                    )
 
 with tab2:
+    if st.session_state.get("user", {}).get("role") != "farmer":
+        st.info("Incoming produce orders are available to farmer accounts.")
+    else:
+        st.subheader("Orders for your produce")
+        try:
+            response = httpx.get(
+                f"{API_URL}/orders/incoming",
+                headers=headers(),
+                timeout=10,
+            )
+            incoming_orders = response.json() if response.status_code == 200 else []
+            if response.status_code != 200:
+                st.error(response.json().get("detail", "Could not load incoming orders."))
+        except Exception as exc:
+            st.error(f"Could not load incoming orders: {exc}")
+            incoming_orders = []
+
+        if not incoming_orders:
+            st.info("No buyers have ordered your produce yet.")
+        for order in incoming_orders:
+            with st.expander(
+                f"Order #{order['id']} · {order['status'].title()} · "
+                f"UGX {order['total_amount']:,.0f}"
+            ):
+                st.write(f"**Delivery address:** {order['delivery_address']}")
+                st.write(f"**Placed:** {order['created_at'][:19]}")
+                for item in order["items"]:
+                    st.write(
+                        f"- {item['product_name']}: {item['quantity']} {item['unit']} "
+                        f"× UGX {item['unit_price']:,.0f} = UGX {item['subtotal']:,.0f}"
+                    )
+
+with tab3:
     st.subheader("Deliveries")
     try:
         r = httpx.get(f"{API_URL}/deliveries/", headers=headers(), timeout=10)
@@ -76,7 +115,7 @@ with tab2:
             }.get(d["status"], "⚪")
             st.write(f"{status_emoji} **Delivery #{d['id']}** for Order #{d['order_id']} → `{d['status']}`")
 
-with tab3:
+with tab4:
     st.subheader("Harvesta Delivery Vans")
     try:
         r = httpx.get(f"{API_URL}/deliveries/vans", timeout=10)

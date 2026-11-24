@@ -11,9 +11,9 @@ if str(Path(__file__).resolve().parents[1]) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 try:
-    from streamlit_app.api_config import get_api_url, normalize_api_url
+    from streamlit_app.api_config import sidebar_api_url
 except ImportError:
-    from api_config import get_api_url, normalize_api_url
+    from api_config import sidebar_api_url
 
 st.set_page_config(
     page_title="Account Settings | Harvesta",
@@ -25,8 +25,7 @@ css_path = Path(__file__).parents[1] / "styles.css"
 if css_path.exists():
     st.markdown(f"<style>{css_path.read_text()}</style>", unsafe_allow_html=True)
 
-DEFAULT_API_URL = get_api_url()
-API_URL = normalize_api_url(st.sidebar.text_input("API URL", value=DEFAULT_API_URL, key="api_account"))
+API_URL = sidebar_api_url()
 if not st.session_state.get("token"):
     st.warning("Please sign in first.")
     st.stop()

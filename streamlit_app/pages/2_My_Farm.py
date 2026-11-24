@@ -8,9 +8,9 @@ if str(Path(__file__).resolve().parents[1]) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 try:
-    from streamlit_app.api_config import get_api_url, normalize_api_url
+    from streamlit_app.api_config import sidebar_api_url
 except ImportError:
-    from api_config import get_api_url, normalize_api_url
+    from api_config import sidebar_api_url
 
 st.set_page_config(page_title="My Farm | Harvesta", page_icon=str(Path(__file__).parents[2] / "harvesta_icon.png"), layout="wide")
 
@@ -20,8 +20,7 @@ if css_path.exists():
 if st.session_state.get("dark_mode", False):
     st.markdown('<style>.stApp{background:#102319!important;color:#edf5ee!important}.stApp h1,.stApp h2,.stApp h3,.stApp p{color:#edf5ee!important}[data-testid="stSidebar"]{background:#13291b!important}</style>', unsafe_allow_html=True)
 
-DEFAULT_API_URL = get_api_url()
-API_URL = normalize_api_url(st.sidebar.text_input("API URL", value=DEFAULT_API_URL, key="api_farm"))
+API_URL = sidebar_api_url()
 
 if "token" not in st.session_state or not st.session_state.token:
     st.warning("Please log in as a **farmer** from the Home page first.")
@@ -89,6 +88,7 @@ if my_products:
         col1, col2, col3 = st.columns([3, 1, 1])
         with col1:
             st.write(f"**{p['name']}** – {p['quantity']} {p['unit']} @ UGX {p['price_per_unit']:,.0f}")
+            st.caption(p.get("farmer_location") or "Uganda")
         with col2:
             st.caption(p["status"])
         with col3:
@@ -97,6 +97,13 @@ else:
     st.info("You have no products listed yet.")
 
 with st.expander("List a new product"):
+    farmer = st.session_state.get("user") or {}
+    listing_location = (
+        farmer.get("district")
+        or farmer.get("location_name")
+        or "your account location"
+    )
+    st.caption(f"Marketplace buyers will see your listing location as {listing_location}.")
     with st.form("new_product"):
         pname = st.text_input("Product Name")
         category = st.selectbox("Category", ["crop", "livestock", "processed", "other"])

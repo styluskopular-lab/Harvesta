@@ -55,3 +55,11 @@ class OrderItem(Base):
 
     def __repr__(self) -> str:
         return f"<OrderItem product={self.product_id} qty={self.quantity}>"
+
+    @property
+    def product_name(self) -> str | None:
+        return self.product.name if self.product else None
+
+    @property
+    def unit(self) -> str | None:
+        return self.product.unit if self.product else None

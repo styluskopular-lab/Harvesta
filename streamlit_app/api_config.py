@@ -46,6 +46,16 @@ def get_api_url() -> str:
     return normalize_api_url(backend_api_url)
 
 
+def sidebar_api_url() -> str:
+    with st.sidebar.expander("Developer Settings"):
+        backend_api_url = st.text_input(
+            "Backend API URL",
+            value=get_api_url(),
+            key="developer_api_url",
+        )
+    return normalize_api_url(backend_api_url)
+
+
 def api_post(url: str, **kwargs) -> httpx.Response:
     return httpx.post(
         normalize_backend_api_url(url),

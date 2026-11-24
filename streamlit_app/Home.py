@@ -9,9 +9,9 @@ if str(Path(__file__).resolve().parents[1]) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 try:
-    from streamlit_app.api_config import api_post, get_api_url, normalize_api_url
+    from streamlit_app.api_config import api_post, sidebar_api_url
 except ImportError:
-    from api_config import api_post, get_api_url, normalize_api_url
+    from api_config import api_post, sidebar_api_url
 
 st.set_page_config(
     page_title="Harvesta",
@@ -25,11 +25,7 @@ css_path = Path(__file__).with_name("styles.css")
 if css_path.exists():
     st.markdown(f"<style>{css_path.read_text()}</style>", unsafe_allow_html=True)
 
-# API base URL
-DEFAULT_API_URL = get_api_url()
-API_URL = normalize_api_url(
-    st.sidebar.text_input("API URL", value=DEFAULT_API_URL, key="api_url")
-)
+API_URL = sidebar_api_url()
 
 # Session state
 if "token" not in st.session_state:
@@ -40,10 +36,6 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 if "rules_accepted" not in st.session_state:
     st.session_state.rules_accepted = False
-
-if st.session_state.pop("redirect_to_dashboard", False):
-    st.switch_page("pages/6_Dashboard.py")
-
 
 def api_headers():
     if st.session_state.token:
@@ -65,10 +57,15 @@ def login(email: str, password: str):
             # Fetch user
             me = httpx.get(f"{API_URL}/auth/me", headers=api_headers(), timeout=10)
             if me.status_code == 200:
-                st.session_state.user = me.json()
+                user = me.json()
+                st.session_state.user = user
                 st.session_state.authenticated = True
-                st.session_state.rules_accepted = bool(me.json().get("privacy_consent", True))
-            return True
+                st.session_state.rules_accepted = bool(user.get("privacy_consent", False))
+                return True
+            st.session_state.token = None
+            st.session_state.authenticated = False
+            st.error("Signed in, but your account could not be loaded. Please try again.")
+            return False
         else:
             st.error(r.json().get("detail", "Login failed"))
             return False
@@ -122,7 +119,7 @@ with st.sidebar:
             password = st.text_input("Password", type="password", value="buyer123", key="login_password")
             if st.button("Sign In", use_container_width=True, key="login_button"):
                 if login(email, password):
-                    st.rerun()
+                    st.switch_page("pages/6_Dashboard.py")
         with register_tab:
             with st.form("create_account_form", clear_on_submit=False):
                 full_name = st.text_input("Full name", key="register_name")
@@ -378,17 +375,17 @@ with st.sidebar:
                                 "phone": account.get("phone"),
                                 "role": account["role"],
                                 "location_name": account.get("location_name"),
+                                "district": account.get("district"),
+                                "subcounty": account.get("subcounty"),
+                                "village": account.get("village"),
                                 "is_active": account["is_active"],
                                 "created_at": account["created_at"],
                                 "privacy_consent": True,
                             }
-                            st.session_state.api_url = API_URL
                             st.session_state.authenticated = True
                             st.session_state.rules_accepted = True
-                            st.session_state.redirect_to_dashboard = True
                             st.toast("Account created!")
-                            st.success("Account created!")
-                            st.rerun()
+                            st.switch_page("pages/6_Dashboard.py")
                         else:
                             st.error(backend_error_message(response))
                     except Exception as e:
