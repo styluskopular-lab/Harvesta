@@ -2,7 +2,7 @@ from pathlib import Path
 from datetime import date
 import httpx
 import streamlit as st
-from api_config import get_api_url, normalize_api_url
+from streamlit_app.api_config import get_api_url, normalize_api_url
 
 st.set_page_config(
     page_title="Veterinary | Harvesta",

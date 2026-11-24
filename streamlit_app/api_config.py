@@ -6,7 +6,7 @@ import httpx
 import streamlit as st
 from streamlit import config as st_config
 
-DEFAULT_BACKEND_API_URL = "https://onrender.com"
+DEFAULT_BACKEND_API_URL = "https://harvesta-xbni.onrender.com/api/v1"
 
 
 def normalize_backend_api_url(url: str) -> str:

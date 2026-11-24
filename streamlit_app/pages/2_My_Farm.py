@@ -2,7 +2,7 @@ import streamlit as st
 import httpx
 from datetime import date, timedelta
 from pathlib import Path
-from api_config import get_api_url, normalize_api_url
+from streamlit_app.api_config import get_api_url, normalize_api_url
 
 st.set_page_config(page_title="My Farm | Harvesta", page_icon=str(Path(__file__).parents[2] / "harvesta_icon.png"), layout="wide")
 

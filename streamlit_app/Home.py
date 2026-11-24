@@ -3,7 +3,7 @@ import httpx
 from pathlib import Path
 import re
 from datetime import date
-from api_config import api_post, get_api_url, normalize_api_url
+from streamlit_app.api_config import api_post, get_api_url, normalize_api_url
 
 st.set_page_config(
     page_title="Harvesta",
