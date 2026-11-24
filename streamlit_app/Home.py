@@ -1,9 +1,17 @@
 import streamlit as st
 import httpx
+import sys
 from pathlib import Path
 import re
 from datetime import date
-from streamlit_app.api_config import api_post, get_api_url, normalize_api_url
+
+if str(Path(__file__).resolve().parents[1]) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+try:
+    from streamlit_app.api_config import api_post, get_api_url, normalize_api_url
+except ImportError:
+    from api_config import api_post, get_api_url, normalize_api_url
 
 st.set_page_config(
     page_title="Harvesta",
