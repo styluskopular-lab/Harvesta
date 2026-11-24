@@ -23,6 +23,8 @@ from app.schemas.delivery import (
     DeliveryRead,
     DeliveryUpdate,
 )
+from app.services.notification_dispatcher import dispatch_user_notification
+from app.services.wallet import settle_order_if_ready
 
 router = APIRouter(prefix="/deliveries", tags=["Deliveries & Vans"])
 
@@ -108,6 +110,29 @@ def _assigned_driver_id(delivery: Delivery) -> int | None:
     return None
 
 
+def _notify_delivery_participants(db: Session, delivery: Delivery) -> None:
+    recipients = {delivery.order.buyer.id: delivery.order.buyer}
+    for order_item in delivery.order.items:
+        farmer = order_item.product.farmer if order_item.product else None
+        if farmer:
+            recipients[farmer.id] = farmer
+    driver = delivery.driver or (delivery.van.driver if delivery.van else None)
+    if driver:
+        recipients[driver.id] = driver
+
+    for user in recipients.values():
+        dispatch_user_notification(
+            db,
+            user,
+            "delivery_status",
+            "Harvesta delivery update",
+            (
+                f"Order #{delivery.order_id} delivery status is now "
+                f"{delivery.status.replace('_', ' ').title()}."
+            ),
+        )
+
+
 # --- Vans ---
 @router.post("/vans", response_model=DeliveryVanRead, status_code=status.HTTP_201_CREATED)
 def create_van(
@@ -149,6 +174,7 @@ def create_delivery(
     order.status = OrderStatus.CONFIRMED.value
     db.commit()
     db.refresh(delivery)
+    _notify_delivery_participants(db, delivery)
     return _delivery_response(delivery)
 
 
@@ -212,6 +238,7 @@ def accept_delivery(
     delivery.order.status = OrderStatus.CONFIRMED.value
     db.commit()
     db.refresh(delivery)
+    _notify_delivery_participants(db, delivery)
     return _delivery_response(delivery)
 
 
@@ -259,9 +286,21 @@ def update_delivery(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin", "driver", "shop_manager")),
 ):
-    delivery = db.query(Delivery).filter(Delivery.id == delivery_id).first()
+    delivery = (
+        db.query(Delivery)
+        .filter(Delivery.id == delivery_id)
+        .with_for_update()
+        .first()
+    )
     if not delivery:
         raise HTTPException(status_code=404, detail="Delivery not found")
+    order = (
+        db.query(Order)
+        .filter(Order.id == delivery.order_id)
+        .with_for_update()
+        .first()
+    )
+    delivery.order = order
 
     update_data = delivery_in.model_dump(exclude_unset=True)
     if current_user.role == "driver":
@@ -276,6 +315,7 @@ def update_delivery(
                 detail=f"Next valid delivery status is {expected_status or 'none'}",
             )
 
+    previous_status = delivery.status
     for field, value in update_data.items():
         setattr(delivery, field, value)
 
@@ -291,6 +331,10 @@ def update_delivery(
     elif delivery.status == DeliveryStatus.DELIVERED.value:
         delivery.order.status = OrderStatus.DELIVERED.value
 
+    if delivery.status != previous_status:
+        settle_order_if_ready(db, delivery.order)
     db.commit()
     db.refresh(delivery)
+    if delivery.status != previous_status:
+        _notify_delivery_participants(db, delivery)
     return _delivery_response(delivery)

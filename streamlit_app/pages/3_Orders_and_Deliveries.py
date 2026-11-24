@@ -70,8 +70,11 @@ def render_delivery_summary(delivery):
 
 def render_payment(order, widget_key=None, allow_confirmation=True):
     methods = {
+        "wallet": "Harvesta Wallet",
         "cash_on_delivery": "Cash on Delivery",
         "mobile_money": "MTN / Airtel Mobile Money",
+        "card": "Visa / Mastercard",
+        "paypal": "PayPal",
     }
     method = methods.get(
         order.get("payment_method"), order.get("payment_method", "Unknown")
@@ -79,6 +82,14 @@ def render_payment(order, widget_key=None, allow_confirmation=True):
     payment_status = order.get("payment_status", "pending")
     display_status = "Paid" if payment_status == "paid" else "Pending"
     st.write(f"**Payment:** {method} · {display_status} in UGX")
+    if payment_status != "paid":
+        if order.get("payment_method") == "cash_on_delivery":
+            st.caption("Cash is due on delivery and remains pending until verified.")
+        else:
+            st.caption(
+                "Provider payment is not automatically charged; an administrator "
+                "must verify it before marking the order paid."
+            )
     if order.get("payment_reference"):
         st.write(f"**Transaction reference:** {order['payment_reference']}")
 

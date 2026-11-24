@@ -118,17 +118,82 @@ else:
 
     address = st.text_input("Delivery Address", placeholder="e.g. Nakawa, Kampala, Uganda")
     notes = st.text_area("Notes (optional)")
+    payment_method_labels = {
+        "Cash on Delivery": "cash_on_delivery",
+        "Harvesta Wallet": "wallet",
+        "MTN / Airtel Mobile Money": "mobile_money",
+        "Visa / Mastercard": "card",
+        "PayPal": "paypal",
+    }
     payment_method = st.selectbox(
         "Payment method",
-        ["Cash on Delivery", "MTN / Airtel Mobile Money"],
+        list(payment_method_labels),
         key="checkout_payment_method",
     )
     payment_reference = None
-    if payment_method == "MTN / Airtel Mobile Money":
+    if payment_method in {
+        "MTN / Airtel Mobile Money",
+        "Visa / Mastercard",
+        "PayPal",
+    }:
         payment_reference = st.text_input(
-            "Mobile Money transaction reference (optional)",
+            "Provider transaction reference (optional)",
             key="checkout_payment_reference",
         )
+        st.caption(
+            "External payments are not charged by Harvesta yet. They remain pending "
+            "until an administrator manually verifies the payment."
+        )
+
+    order_quote = None
+    if st.session_state.token and st.session_state.get("user", {}).get("role") == "buyer":
+        try:
+            quote_response = httpx.post(
+                f"{API_URL}/orders/quote",
+                json={
+                    "items": [
+                        {"product_id": item["product_id"], "quantity": item["quantity"]}
+                        for item in st.session_state.cart
+                    ]
+                },
+                headers=headers(),
+                timeout=10,
+            )
+            if quote_response.status_code == 200:
+                order_quote = quote_response.json()
+                st.subheader("Fee & tax breakdown (UGX)")
+                st.dataframe(
+                    [
+                        {"Item": "Produce and delivery base amount", "UGX": order_quote["base_amount_ugx"]},
+                        {"Item": "Estimated Harvesta service fee (deducted from farmer proceeds)", "UGX": order_quote["service_fee_ugx"]},
+                        {"Item": "Estimated VAT on service fee", "UGX": order_quote["vat_ugx"]},
+                        {"Item": "Estimated transaction levy", "UGX": order_quote["withdrawal_levy_ugx"]},
+                        {"Item": "Total payable by buyer", "UGX": order_quote["total_payable_ugx"]},
+                        {"Item": "Estimated net farmer proceeds (before delivery)", "UGX": order_quote["net_amount_ugx"]},
+                    ],
+                    hide_index=True,
+                    use_container_width=True,
+                )
+                st.caption(order_quote["tax_note"])
+            else:
+                st.error(quote_response.json().get("detail", "Could not calculate checkout fees."))
+        except httpx.HTTPError as exc:
+            st.error(f"Could not calculate checkout fees: {exc}")
+
+        if payment_method == "Harvesta Wallet":
+            try:
+                wallet_response = httpx.get(
+                    f"{API_URL}/wallet/",
+                    headers=headers(),
+                    timeout=10,
+                )
+                if wallet_response.status_code == 200:
+                    balance = wallet_response.json()["balance_ugx"]
+                    st.caption(f"Available wallet balance: UGX {balance:,.0f}")
+            except httpx.HTTPError as exc:
+                st.error(f"Could not load wallet balance: {exc}")
+    else:
+        st.info("Sign in with a Buyer account to view the final checkout breakdown.")
 
     col_c1, col_c2 = st.columns(2)
     with col_c1:
@@ -143,16 +208,14 @@ else:
                 st.error("Only buyer accounts can place orders.")
             elif not address:
                 st.error("Please enter a delivery address.")
+            elif order_quote is None:
+                st.error("Checkout fees must be confirmed before placing this order.")
             else:
                 payload = {
                     "items": [{"product_id": i["product_id"], "quantity": i["quantity"]} for i in st.session_state.cart],
                     "delivery_address": address,
                     "notes": notes or None,
-                    "payment_method": (
-                        "mobile_money"
-                        if payment_method == "MTN / Airtel Mobile Money"
-                        else "cash_on_delivery"
-                    ),
+                    "payment_method": payment_method_labels[payment_method],
                     "payment_reference": payment_reference or None,
                 }
                 try:

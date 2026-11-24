@@ -18,7 +18,18 @@ from app.models.product import Product
 from app.models.order import Order
 from app.models.farm_records import CropPlot, LivestockAnimal
 from app.models.farm_finance import FarmTransaction
-from app.schemas.user import UserCreate, UserRead, Token, LoginRequest, RegisterResponse
+from app.models.wallet import WalletTransaction
+from app.models.app_review import AppReview
+from app.models.notification import NotificationLog
+from app.services.wallet import wallet_balance_ugx
+from app.schemas.user import (
+    LoginRequest,
+    RegisterResponse,
+    Token,
+    UserCreate,
+    UserRead,
+    UserUpdate,
+)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -71,6 +82,7 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
         full_name=user_in.full_name,
         phone=user_in.phone,
         role=user_in.role,
+        notification_preference=user_in.notification_preference,
         latitude=user_in.latitude,
         longitude=user_in.longitude,
         location_name=user_in.location_name,
@@ -104,6 +116,7 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
         "full_name": user.full_name,
         "phone": user.phone,
         "role": user.role,
+        "notification_preference": user.notification_preference,
         "latitude": user.latitude,
         "longitude": user.longitude,
         "location_name": user.location_name,
@@ -172,6 +185,22 @@ def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
+@router.patch("/me", response_model=UserRead)
+def update_users_me(
+    user_in: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    update_data = user_in.model_dump(exclude_unset=True, exclude={"is_active"})
+    if "notification_preference" in update_data and not update_data["notification_preference"]:
+        raise HTTPException(status_code=422, detail="Choose a notification preference")
+    for field, value in update_data.items():
+        setattr(current_user, field, value)
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
 @router.get("/me/export")
 def export_my_data(
     db: Session = Depends(get_db),
@@ -184,6 +213,7 @@ def export_my_data(
             "full_name": current_user.full_name,
             "phone": current_user.phone,
             "role": current_user.role,
+            "notification_preference": current_user.notification_preference,
             "location_name": current_user.location_name,
             "nin": current_user.nin,
             "date_of_birth": current_user.date_of_birth,
@@ -246,6 +276,34 @@ def delete_my_account(
     current_user: User = Depends(get_current_user),
 ):
     user_id = current_user.id
+    pending_wallet_transactions = (
+        db.query(WalletTransaction.id)
+        .filter(
+            WalletTransaction.user_id == user_id,
+            WalletTransaction.status == "pending",
+        )
+        .first()
+    )
+    if pending_wallet_transactions:
+        raise HTTPException(
+            status_code=409,
+            detail="Resolve pending wallet transactions before deleting your account",
+        )
+    if wallet_balance_ugx(db, user_id) != 0:
+        raise HTTPException(
+            status_code=409,
+            detail="Withdraw or spend your wallet balance before deleting your account",
+        )
+    db.query(AppReview).filter(AppReview.user_id == user_id).delete(
+        synchronize_session=False
+    )
+    db.query(NotificationLog).filter(NotificationLog.user_id == user_id).delete(
+        synchronize_session=False
+    )
+    db.query(WalletTransaction).filter(WalletTransaction.user_id == user_id).update(
+        {WalletTransaction.user_id: None},
+        synchronize_session=False,
+    )
     db.query(CropPlot).filter(CropPlot.owner_id == user_id).delete(synchronize_session=False)
     db.query(LivestockAnimal).filter(LivestockAnimal.owner_id == user_id).delete(synchronize_session=False)
     db.query(FarmTransaction).filter(FarmTransaction.owner_id == user_id).delete(synchronize_session=False)

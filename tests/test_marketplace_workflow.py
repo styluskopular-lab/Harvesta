@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -6,6 +8,10 @@ from sqlalchemy.pool import StaticPool
 from app import main
 from app.core.database import Base, get_db
 from app.core.schema_updates import ensure_workflow_schema
+from app.core.security import create_access_token
+from app.models.user import User
+from app.models.notification import NotificationLog
+from app.models.wallet import WalletTransaction
 from app.services.marketplace_seed import seed_marketplace_if_empty
 from sqlalchemy import inspect
 
@@ -335,5 +341,278 @@ def test_ensure_workflow_schema_adds_missing_columns_idempotently():
             "driver_id",
             "estimated_fee_ugx",
         } <= {column["name"] for column in inspector.get_columns("deliveries")}
+        assert "notification_preference" in {
+            column["name"] for column in inspector.get_columns("users")
+        }
     finally:
+        engine.dispose()
+
+
+def test_wallet_fees_reviews_and_recorded_notifications(monkeypatch):
+    for key in (
+        "SMTP_HOST",
+        "SMTP_USER",
+        "SMTP_PASS",
+        "AT_USERNAME",
+        "AT_API_KEY",
+        "AFRICASTALKING_USERNAME",
+        "AFRICASTALKING_API_KEY",
+        "TWILIO_ACCOUNT_SID",
+        "TWILIO_AUTH_TOKEN",
+        "TWILIO_FROM_NUMBER",
+    ):
+        monkeypatch.setenv(key, "")
+
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    test_sessions = sessionmaker(autoflush=False, autocommit=False, bind=engine)
+    monkeypatch.setattr(main, "engine", engine)
+    monkeypatch.setattr(main, "SessionLocal", test_sessions)
+
+    def override_get_db():
+        db = test_sessions()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    Base.metadata.drop_all(bind=engine)
+    main.app.dependency_overrides[get_db] = override_get_db
+
+    def register(client, *, email, role, nin, **extra):
+        body = {
+            "email": email,
+            "full_name": role.title() + " User",
+            "phone": {
+                "farmer": "+256700000001",
+                "buyer": "+256700000002",
+                "driver": "+256700000003",
+            }[role],
+            "role": role,
+            "password": "workflow-pass",
+            "privacy_consent": True,
+            "nin": nin,
+            "date_of_birth": "1988-04-12",
+            "district": "Kampala",
+            "village": "Nakawa",
+            "next_of_kin_name": "Workflow Contact",
+            "next_of_kin_contact": "+256700000002",
+            **extra,
+        }
+        response = client.post("/api/v1/auth/register", json=body)
+        assert response.status_code == 201, response.text
+        return response.json()
+
+    try:
+        with TestClient(main.app) as client:
+            farmer = register(
+                client,
+                email="wallet.farmer@gmail.com",
+                role="farmer",
+                nin="CM123456789012",
+                primary_farm_enterprise="Crops",
+            )
+            buyer = register(
+                client,
+                email="wallet.buyer@gmail.com",
+                role="buyer",
+                nin="CF123456789012",
+                notification_preference="both",
+            )
+            driver = register(
+                client,
+                email="wallet.driver@gmail.com",
+                role="driver",
+                nin="CM987654321098",
+                driving_permit_number="UG-DL-0001",
+                driving_permit_class="B",
+                vehicle_type="Pickup",
+                vehicle_plate="UAA 123A",
+                goods_insurance_status="active",
+            )
+            farmer_headers = {"Authorization": f"Bearer {farmer['access_token']}"}
+            buyer_headers = {"Authorization": f"Bearer {buyer['access_token']}"}
+            driver_headers = {"Authorization": f"Bearer {driver['access_token']}"}
+
+            with test_sessions() as db:
+                admin = User(
+                    email="wallet.admin@gmail.com",
+                    full_name="Wallet Admin",
+                    role="admin",
+                    hashed_password="unused",
+                )
+                db.add(admin)
+                db.commit()
+                db.refresh(admin)
+                admin_headers = {
+                    "Authorization": f"Bearer "
+                    f"{create_access_token(data={'sub': str(admin.id), 'role': 'admin'})}"
+                }
+
+            initial_review_status = client.get(
+                "/api/v1/reviews/prompt", headers=buyer_headers
+            )
+            assert initial_review_status.status_code == 200
+            assert initial_review_status.json()["eligible"] is False
+            updated_preference = client.patch(
+                "/api/v1/auth/me",
+                headers=buyer_headers,
+                json={"notification_preference": "sms"},
+            )
+            assert updated_preference.status_code == 200
+            assert updated_preference.json()["notification_preference"] == "sms"
+            updated_preference = client.patch(
+                "/api/v1/auth/me",
+                headers=buyer_headers,
+                json={"notification_preference": "both"},
+            )
+            assert updated_preference.status_code == 200
+
+            deposit = client.post(
+                "/api/v1/wallet/deposits",
+                headers=buyer_headers,
+                json={
+                    "amount_ugx": 100000,
+                    "payment_method": "mobile_money",
+                    "reference": "MTN-TEST-1",
+                },
+            )
+            assert deposit.status_code == 201, deposit.text
+            assert deposit.json()["status"] == "pending"
+            assert client.get("/api/v1/wallet/", headers=buyer_headers).json()[
+                "balance_ugx"
+            ] == 0
+
+            resolved_deposit = client.patch(
+                f"/api/v1/wallet/admin/transactions/{deposit.json()['id']}",
+                headers=admin_headers,
+                json={"status": "completed", "reference": "VERIFIED-1"},
+            )
+            assert resolved_deposit.status_code == 200, resolved_deposit.text
+            assert client.get("/api/v1/wallet/", headers=buyer_headers).json()[
+                "balance_ugx"
+            ] == 100000
+
+            withdrawal_quote = client.post(
+                "/api/v1/wallet/quote",
+                headers=buyer_headers,
+                json={"operation": "withdrawal", "amount_ugx": 10000},
+            )
+            assert withdrawal_quote.status_code == 200
+            assert withdrawal_quote.json()["withdrawal_levy_ugx"] == 50
+            withdrawal = client.post(
+                "/api/v1/wallet/withdrawals",
+                headers=buyer_headers,
+                json={
+                    "amount_ugx": 10000,
+                    "destination": "+256700000001",
+                },
+            )
+            assert withdrawal.status_code == 201, withdrawal.text
+            assert client.get("/api/v1/wallet/", headers=buyer_headers).json()[
+                "balance_ugx"
+            ] == 89950
+
+            product = client.post(
+                "/api/v1/products/",
+                headers=farmer_headers,
+                json={
+                    "name": "Matooke",
+                    "category": "crop",
+                    "quantity": 10,
+                    "unit": "bunch",
+                    "price_per_unit": 1000,
+                    "status": "available",
+                },
+            )
+            assert product.status_code == 201, product.text
+            quote = client.post(
+                "/api/v1/orders/quote",
+                headers=buyer_headers,
+                json={"items": [{"product_id": product.json()["id"], "quantity": 1}]},
+            )
+            assert quote.status_code == 200, quote.text
+            assert quote.json()["service_fee_ugx"] == 50
+            assert quote.json()["vat_ugx"] == 9
+            assert quote.json()["total_payable_ugx"] == 6000
+            assert quote.json()["tax_estimate"] is True
+
+            order = client.post(
+                "/api/v1/orders/",
+                headers=buyer_headers,
+                json={
+                    "items": [{"product_id": product.json()["id"], "quantity": 1}],
+                    "delivery_address": "Nakawa, Kampala, Uganda",
+                    "payment_method": "wallet",
+                },
+            )
+            assert order.status_code == 201, order.text
+            assert order.json()["payment_status"] == "paid"
+            assert client.get("/api/v1/wallet/", headers=buyer_headers).json()[
+                "balance_ugx"
+            ] == 83950
+
+            delivery_id = order.json()["delivery"]["id"]
+            accepted = client.post(
+                f"/api/v1/deliveries/{delivery_id}/accept",
+                headers=driver_headers,
+            )
+            assert accepted.status_code == 200, accepted.text
+            for next_status in ("picked_up", "in_transit", "delivered"):
+                updated = client.patch(
+                    f"/api/v1/deliveries/{delivery_id}",
+                    headers=driver_headers,
+                    json={"status": next_status},
+                )
+                assert updated.status_code == 200, updated.text
+
+            farmer_wallet = client.get("/api/v1/wallet/", headers=farmer_headers)
+            assert farmer_wallet.status_code == 200
+            assert farmer_wallet.json()["balance_ugx"] == 941
+            driver_wallet = client.get("/api/v1/wallet/", headers=driver_headers)
+            assert driver_wallet.json()["balance_ugx"] == 5000
+
+            with test_sessions() as db:
+                farmer_types = {
+                    item.transaction_type
+                    for item in db.query(WalletTransaction)
+                    .filter(WalletTransaction.user_id == farmer["id"])
+                    .all()
+                }
+                assert {"sale_earning", "service_fee", "tax_charge"} <= farmer_types
+                buyer_created_notifications = db.query(NotificationLog).filter(
+                    NotificationLog.user_id == buyer["id"],
+                    NotificationLog.event_type == "order_created",
+                    NotificationLog.status == "recorded",
+                ).all()
+                assert {item.channel for item in buyer_created_notifications} == {
+                    "email",
+                    "sms",
+                }
+                buyer_user = db.query(User).filter(User.id == buyer["id"]).first()
+                buyer_user.created_at = datetime.now(timezone.utc) - timedelta(days=8)
+                db.commit()
+
+            eligible = client.get("/api/v1/reviews/prompt", headers=buyer_headers)
+            assert eligible.status_code == 200
+            assert eligible.json()["eligible"] is True
+            review = client.post(
+                "/api/v1/reviews/",
+                headers=buyer_headers,
+                json={"rating": 5, "comments": "Good local produce."},
+            )
+            assert review.status_code == 201, review.text
+            assert review.json()["rating"] == 5
+            duplicate_review = client.post(
+                "/api/v1/reviews/",
+                headers=buyer_headers,
+                json={"rating": 4},
+            )
+            assert duplicate_review.status_code == 409
+    finally:
+        main.app.dependency_overrides.clear()
+        Base.metadata.drop_all(bind=engine)
         engine.dispose()

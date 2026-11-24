@@ -1,5 +1,5 @@
 from datetime import datetime, date
-from typing import Optional
+from typing import Optional, Literal
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 
@@ -11,6 +11,7 @@ class UserBase(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     location_name: Optional[str] = None
+    notification_preference: Literal["email", "sms", "both"] = "email"
     privacy_consent: bool = False
     privacy_consent_at: Optional[datetime] = None
     nin: Optional[str] = None
@@ -57,6 +58,7 @@ class UserUpdate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     location_name: Optional[str] = None
+    notification_preference: Optional[Literal["email", "sms", "both"]] = None
 
 
 class UserRead(UserBase):

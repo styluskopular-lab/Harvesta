@@ -2,6 +2,9 @@ from sqlalchemy import Engine, inspect, text
 
 
 _ADDITIVE_COLUMNS = {
+    "users": {
+        "notification_preference": "VARCHAR(10) NOT NULL DEFAULT 'email'",
+    },
     "orders": {
         "payment_method": "VARCHAR(30) NOT NULL DEFAULT 'cash_on_delivery'",
         "payment_status": "VARCHAR(20) NOT NULL DEFAULT 'pending'",

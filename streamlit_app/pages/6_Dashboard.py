@@ -59,6 +59,22 @@ try:
 except Exception:
     farm_count = plot_count = livestock_count = order_count = 0
 
+try:
+    wallet_response = httpx.get(f"{API_URL}/wallet/", headers=headers, timeout=10)
+    wallet_balance = (
+        wallet_response.json().get("balance_ugx", 0)
+        if wallet_response.status_code == 200
+        else None
+    )
+except httpx.HTTPError:
+    wallet_balance = None
+
+try:
+    review_response = httpx.get(f"{API_URL}/reviews/prompt", headers=headers, timeout=10)
+    review_status = review_response.json() if review_response.status_code == 200 else {}
+except httpx.HTTPError:
+    review_status = {}
+
 c1, c2, c3 = st.columns(3)
 with c1:
     st.metric("Account", user["role"].replace("_", " ").title())
@@ -67,14 +83,37 @@ with c2:
 with c3:
     st.metric("Phone", user.get("phone") or "Not set")
 
-d1, d2, d3, d4 = st.columns(4)
+d1, d2, d3, d4, d5 = st.columns(5)
 d1.metric("Farms", farm_count)
 d2.metric("Crop plots", plot_count)
 d3.metric("Livestock", livestock_count)
 d4.metric("Orders", order_count)
+d5.metric(
+    "Wallet balance",
+    f"UGX {wallet_balance:,.0f}" if wallet_balance is not None else "Unavailable",
+)
+
+if review_status.get("eligible"):
+    st.info("You have been using Harvesta for one week. Please rate your experience.")
+    rating = st.select_slider("Rate Harvesta (1–5)", options=[1, 2, 3, 4, 5], value=5)
+    comments = st.text_area("Optional feedback", key="dashboard_review_comments")
+    if st.button("Submit app rating", type="primary"):
+        try:
+            review_submit = httpx.post(
+                f"{API_URL}/reviews/",
+                json={"rating": rating, "comments": comments or None},
+                headers=headers,
+                timeout=10,
+            )
+            if review_submit.status_code == 201:
+                st.success("Thank you for rating Harvesta.")
+                st.rerun()
+            st.error(review_submit.json().get("detail", "Could not submit rating."))
+        except httpx.HTTPError as exc:
+            st.error(f"Could not submit rating: {exc}")
 
 st.markdown("### Quick actions")
-a1, a2, a3 = st.columns(3)
+a1, a2, a3, a4 = st.columns(4)
 with a1:
     if st.button("Browse Marketplace", use_container_width=True):
         st.switch_page("pages/1_Marketplace.py")
@@ -84,6 +123,9 @@ with a2:
 with a3:
     if st.button("Check weather", use_container_width=True):
         st.switch_page("pages/4_Farm_Weather.py")
+with a4:
+    if st.button("Wallet & settings", use_container_width=True):
+        st.switch_page("pages/7_Account_Settings.py")
 
 st.markdown("---")
 st.caption("\u00a9 2026 Harvesta. All rights reserved.")

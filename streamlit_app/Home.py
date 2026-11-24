@@ -226,6 +226,12 @@ with st.sidebar:
                     key="register_phone",
                 )
                 reg_email = st.text_input("Gmail address", placeholder="name@gmail.com", key="register_email")
+                notification_label = st.selectbox(
+                    "Preferred notifications",
+                    ["Email", "SMS", "Email and SMS"],
+                    key="register_notification_preference",
+                    help="Notifications are recorded in Harvesta until provider credentials are configured.",
+                )
                 nin = st.text_input("Ugandan National Identification Number (NIN)", placeholder="CM123456789012", key="register_nin")
                 dob = st.date_input("Date of Birth", value=date(2000, 1, 1), key="register_dob")
                 district = st.text_input("District", placeholder="Mukono", key="register_district")
@@ -345,6 +351,11 @@ with st.sidebar:
                                 "phone": phone or None,
                                 "location_name": location_name or None,
                                 "role": role,
+                                "notification_preference": {
+                                    "Email": "email",
+                                    "SMS": "sms",
+                                    "Email and SMS": "both",
+                                }[notification_label],
                                 "password": reg_password,
                                 "privacy_consent": consent,
                                 "nin": nin_normalized,
@@ -374,6 +385,7 @@ with st.sidebar:
                                 "full_name": account["full_name"],
                                 "phone": account.get("phone"),
                                 "role": account["role"],
+                                "notification_preference": account.get("notification_preference", "email"),
                                 "location_name": account.get("location_name"),
                                 "district": account.get("district"),
                                 "subcounty": account.get("subcounty"),

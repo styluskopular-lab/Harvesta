@@ -24,7 +24,13 @@ class OrderCreate(BaseModel):
     items: List[OrderItemCreate]
     delivery_address: str
     notes: Optional[str] = None
-    payment_method: Literal["cash_on_delivery", "mobile_money"] = "cash_on_delivery"
+    payment_method: Literal[
+        "wallet",
+        "mobile_money",
+        "card",
+        "paypal",
+        "cash_on_delivery",
+    ] = "cash_on_delivery"
     payment_reference: Optional[str] = Field(default=None, max_length=100)
 
 

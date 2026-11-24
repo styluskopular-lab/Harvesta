@@ -15,8 +15,11 @@ class OrderStatus(str, enum.Enum):
 
 
 class PaymentMethod(str, enum.Enum):
+    WALLET = "wallet"
     CASH_ON_DELIVERY = "cash_on_delivery"
     MOBILE_MONEY = "mobile_money"
+    CARD = "card"
+    PAYPAL = "paypal"
 
 
 class PaymentStatus(str, enum.Enum):

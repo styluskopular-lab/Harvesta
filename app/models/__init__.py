@@ -7,6 +7,9 @@ from app.models.shop import Shop, ShopInventory
 from app.models.veterinary import Veterinarian, VetBooking
 from app.models.farm_records import CropPlot, LivestockAnimal
 from app.models.farm_finance import FarmTransaction
+from app.models.wallet import WalletTransaction
+from app.models.app_review import AppReview
+from app.models.notification import NotificationLog
 
 __all__ = [
     "User",
@@ -23,4 +26,7 @@ __all__ = [
     "CropPlot",
     "LivestockAnimal",
     "FarmTransaction",
+    "WalletTransaction",
+    "AppReview",
+    "NotificationLog",
 ]

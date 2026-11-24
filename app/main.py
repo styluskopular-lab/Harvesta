@@ -5,7 +5,20 @@ from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.core.database import engine, Base, SessionLocal
 from app.core.schema_updates import ensure_workflow_schema
-from app.api.v1 import auth, products, orders, farms, deliveries, shops, weather, veterinary, farm_records, farm_finance
+from app.api.v1 import (
+    auth,
+    deliveries,
+    farm_finance,
+    farm_records,
+    farms,
+    orders,
+    products,
+    reviews,
+    shops,
+    veterinary,
+    wallet,
+    weather,
+)
 from app.services.marketplace_seed import seed_marketplace_if_empty
 
 # Import all models so Base knows about them
@@ -51,6 +64,8 @@ app.include_router(weather.router, prefix="/api/v1")
 app.include_router(veterinary.router, prefix="/api/v1")
 app.include_router(farm_records.router, prefix="/api/v1")
 app.include_router(farm_finance.router, prefix="/api/v1")
+app.include_router(wallet.router, prefix="/api/v1")
+app.include_router(reviews.router, prefix="/api/v1")
 
 
 @app.get("/")
