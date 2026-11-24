@@ -24,6 +24,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
+@router.post("/register/", status_code=status.HTTP_201_CREATED, include_in_schema=False)
 def register(user_in: UserCreate, db: Session = Depends(get_db)):
     if not user_in.privacy_consent:
         raise HTTPException(status_code=400, detail="Privacy Policy and Terms of Use consent is required")
@@ -130,6 +131,7 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
+@router.post("/login/", response_model=Token, include_in_schema=False)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     # OAuth2PasswordRequestForm uses "username" field for email
     user = db.query(User).filter(User.email == form_data.username).first()
@@ -148,6 +150,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 
 
 @router.post("/login/json", response_model=Token)
+@router.post("/login/json/", response_model=Token, include_in_schema=False)
 def login_json(login_data: LoginRequest, db: Session = Depends(get_db)):
     """Alternative login endpoint that accepts JSON body (useful for Streamlit)."""
     identifier = login_data.email.strip()

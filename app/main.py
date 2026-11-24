@@ -23,6 +23,7 @@ app = FastAPI(
     version=settings.APP_VERSION,
     description="Harvesta – Farm-to-Table Agri-Tech Platform API",
     lifespan=lifespan,
+    redirect_slashes=False,
 )
 
 # CORS

@@ -5,7 +5,7 @@ import json
 
 import httpx
 import streamlit as st
-from api_config import get_api_url
+from api_config import get_api_url, normalize_api_url
 
 st.set_page_config(
     page_title="Account Settings | Harvesta",
@@ -18,7 +18,7 @@ if css_path.exists():
     st.markdown(f"<style>{css_path.read_text()}</style>", unsafe_allow_html=True)
 
 DEFAULT_API_URL = get_api_url()
-API_URL = st.sidebar.text_input("API URL", value=DEFAULT_API_URL, key="api_account")
+API_URL = normalize_api_url(st.sidebar.text_input("API URL", value=DEFAULT_API_URL, key="api_account"))
 if not st.session_state.get("token"):
     st.warning("Please sign in first.")
     st.stop()

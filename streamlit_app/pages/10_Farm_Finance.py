@@ -3,7 +3,7 @@ from datetime import date
 import httpx
 import pandas as pd
 import streamlit as st
-from api_config import get_api_url
+from api_config import get_api_url, normalize_api_url
 
 st.set_page_config(
     page_title="Farm Finance | Harvesta",
@@ -16,7 +16,7 @@ if css_path.exists():
     st.markdown(f"<style>{css_path.read_text()}</style>", unsafe_allow_html=True)
 
 DEFAULT_API_URL = get_api_url()
-API_URL = st.session_state.get("api_url") or DEFAULT_API_URL
+API_URL = normalize_api_url(st.session_state.get("api_url") or DEFAULT_API_URL)
 if not st.session_state.get("authenticated") or not st.session_state.get("token"):
     st.warning("Please sign in with a farmer account.")
     st.stop()

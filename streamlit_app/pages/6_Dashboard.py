@@ -1,7 +1,7 @@
 from pathlib import Path
 import httpx
 import streamlit as st
-from api_config import get_api_url
+from api_config import get_api_url, normalize_api_url
 
 st.set_page_config(
     page_title="Dashboard | Harvesta",
@@ -37,7 +37,7 @@ st.title("Dashboard")
 st.success(f"Welcome, {user['full_name']}")
 
 DEFAULT_API_URL = get_api_url()
-API_URL = st.session_state.get("api_url") or DEFAULT_API_URL
+API_URL = normalize_api_url(st.session_state.get("api_url") or DEFAULT_API_URL)
 headers = {"Authorization": f"Bearer {st.session_state.token}"}
 
 try:

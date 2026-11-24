@@ -3,7 +3,7 @@ import httpx
 from pathlib import Path
 import re
 from datetime import date
-from api_config import get_api_url
+from api_config import api_post, get_api_url, normalize_api_url
 
 st.set_page_config(
     page_title="Harvesta",
@@ -19,7 +19,9 @@ if css_path.exists():
 
 # API base URL
 DEFAULT_API_URL = get_api_url()
-API_URL = st.sidebar.text_input("API URL", value=DEFAULT_API_URL, key="api_url")
+API_URL = normalize_api_url(
+    st.sidebar.text_input("API URL", value=DEFAULT_API_URL, key="api_url")
+)
 
 # Session state
 if "token" not in st.session_state:
@@ -43,7 +45,7 @@ def api_headers():
 
 def login(email: str, password: str):
     try:
-        r = httpx.post(
+        r = api_post(
             f"{API_URL}/auth/login/json",
             json={"email": email, "password": password},
             timeout=10,
@@ -330,7 +332,7 @@ with st.sidebar:
                         st.error(error)
                 else:
                     try:
-                        response = httpx.post(
+                        response = api_post(
                             f"{API_URL}/auth/register",
                             json={
                                 "email": reg_email.strip().lower(),

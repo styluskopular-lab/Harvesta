@@ -2,7 +2,7 @@ import streamlit as st
 import httpx
 from datetime import date, timedelta
 from pathlib import Path
-from api_config import get_api_url
+from api_config import get_api_url, normalize_api_url
 
 st.set_page_config(page_title="My Farm | Harvesta", page_icon=str(Path(__file__).parents[2] / "harvesta_icon.png"), layout="wide")
 
@@ -13,7 +13,7 @@ if st.session_state.get("dark_mode", False):
     st.markdown('<style>.stApp{background:#102319!important;color:#edf5ee!important}.stApp h1,.stApp h2,.stApp h3,.stApp p{color:#edf5ee!important}[data-testid="stSidebar"]{background:#13291b!important}</style>', unsafe_allow_html=True)
 
 DEFAULT_API_URL = get_api_url()
-API_URL = st.sidebar.text_input("API URL", value=DEFAULT_API_URL, key="api_farm")
+API_URL = normalize_api_url(st.sidebar.text_input("API URL", value=DEFAULT_API_URL, key="api_farm"))
 
 if "token" not in st.session_state or not st.session_state.token:
     st.warning("Please log in as a **farmer** from the Home page first.")
