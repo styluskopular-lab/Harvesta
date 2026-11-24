@@ -14,6 +14,16 @@ class OrderStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
+class PaymentMethod(str, enum.Enum):
+    CASH_ON_DELIVERY = "cash_on_delivery"
+    MOBILE_MONEY = "mobile_money"
+
+
+class PaymentStatus(str, enum.Enum):
+    PENDING = "pending"
+    PAID = "paid"
+
+
 class Order(Base):
     __tablename__ = "orders"
 
@@ -23,6 +33,13 @@ class Order(Base):
     total_amount: Mapped[float] = mapped_column(Float, default=0.0)
     delivery_address: Mapped[str] = mapped_column(Text, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payment_method: Mapped[str] = mapped_column(
+        String(30), default=PaymentMethod.CASH_ON_DELIVERY.value, nullable=False
+    )
+    payment_status: Mapped[str] = mapped_column(
+        String(20), default=PaymentStatus.PENDING.value, nullable=False
+    )
+    payment_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

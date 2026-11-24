@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import String, Float, ForeignKey, DateTime, Text
+from sqlalchemy import String, Float, ForeignKey, DateTime, Text, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
 
@@ -14,11 +14,16 @@ class VanStatus(str, enum.Enum):
 
 
 class DeliveryStatus(str, enum.Enum):
+    OPEN = "open"
     ASSIGNED = "assigned"
+    ACCEPTED = "accepted"
     PICKED_UP = "picked_up"
     IN_TRANSIT = "in_transit"
     DELIVERED = "delivered"
     FAILED = "failed"
+
+
+DEFAULT_DELIVERY_FEE_UGX = 5000
 
 
 class DeliveryVan(Base):
@@ -48,7 +53,9 @@ class Delivery(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), unique=True, nullable=False)
     van_id: Mapped[int | None] = mapped_column(ForeignKey("delivery_vans.id"), nullable=True)
+    driver_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default=DeliveryStatus.ASSIGNED.value)
+    estimated_fee_ugx: Mapped[int] = mapped_column(Integer, default=DEFAULT_DELIVERY_FEE_UGX, nullable=False)
     pickup_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     estimated_delivery: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     actual_delivery: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -59,6 +66,15 @@ class Delivery(Base):
 
     order = relationship("Order", back_populates="delivery")
     van = relationship("DeliveryVan", back_populates="deliveries")
+    driver = relationship("User", back_populates="deliveries", foreign_keys=[driver_id])
 
     def __repr__(self) -> str:
         return f"<Delivery #{self.id} for Order {self.order_id}>"
+
+    @property
+    def driver_name(self) -> str | None:
+        return self.driver.full_name if self.driver else None
+
+    @property
+    def driver_phone(self) -> str | None:
+        return self.driver.phone if self.driver else None

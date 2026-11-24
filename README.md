@@ -13,9 +13,19 @@ A complete Python full-stack platform inspired by the Harvesta concept:
 - JWT Authentication with roles: `farmer`, `driver`, `shop_manager`, `admin`
 - Farm & Product management
 - Marketplace browsing & ordering
-- Delivery tracking
+- Driver delivery board with atomic job claiming and step-by-step status updates
+- UGX payment tracking for Cash on Delivery and MTN / Airtel Mobile Money
 - Shop inventory
 - Beautiful Streamlit multi-page frontend (green theme)
+
+New marketplace orders automatically open a delivery job with an estimated flat
+fee of UGX 5,000. Drivers can accept it, then update it through Picked Up,
+In Transit, and Delivered. Buyers, farmers, and assigned drivers can see the
+delivery status and driver details. Mobile Money references are recorded on the
+order; an admin or shop manager confirms payment after verification.
+
+On startup, the API adds the new payment and driver-assignment columns to
+existing `orders` and `deliveries` tables when they are missing.
 
 ## Tech Stack
 
@@ -113,6 +123,10 @@ harvesta/
 - `GET  /api/v1/orders` – List orders
 - `POST /api/v1/orders` – Place order
 - `GET  /api/v1/deliveries` – Track deliveries
+- `GET  /api/v1/deliveries/open` – Driver job board
+- `POST /api/v1/deliveries/{id}/accept` – Claim an open delivery
+- `PATCH /api/v1/deliveries/{id}` – Advance an assigned delivery status
+- `PATCH /api/v1/orders/{id}/payment` – Confirm payment (admin/shop manager)
 
 ## License
 

@@ -6,11 +6,17 @@ from app.core.database import get_db
 from app.core.security import get_current_user, require_roles
 from app.models.user import User
 from app.models.product import Product
-from app.models.order import Order, OrderItem, OrderStatus
+from app.models.order import Order, OrderItem, OrderStatus, PaymentStatus
+from app.models.delivery import (
+    DEFAULT_DELIVERY_FEE_UGX,
+    Delivery,
+    DeliveryStatus,
+)
 from app.schemas.order import (
     FarmerOrderItemRead,
     FarmerOrderRead,
     OrderCreate,
+    OrderPaymentUpdate,
     OrderRead,
     OrderUpdate,
 )
@@ -60,9 +66,19 @@ def create_order(
         delivery_address=order_in.delivery_address,
         notes=order_in.notes,
         status=OrderStatus.PENDING.value,
+        payment_method=order_in.payment_method,
+        payment_status=PaymentStatus.PENDING.value,
+        payment_reference=order_in.payment_reference,
     )
     db.add(order)
     db.flush()  # get order.id
+    db.add(
+        Delivery(
+            order_id=order.id,
+            status=DeliveryStatus.OPEN.value,
+            estimated_fee_ugx=DEFAULT_DELIVERY_FEE_UGX,
+        )
+    )
 
     for item_data in order_items:
         order_item = OrderItem(
@@ -108,6 +124,10 @@ def incoming_orders(
                 "delivery_address": order.delivery_address,
                 "notes": order.notes,
                 "created_at": order.created_at,
+                "payment_method": order.payment_method,
+                "payment_status": order.payment_status,
+                "payment_reference": order.payment_reference,
+                "delivery": order.delivery,
                 "items": [],
             }
         orders_by_id[order.id]["total_amount"] += item.subtotal
@@ -130,7 +150,7 @@ def list_orders(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role == "admin":
+    if current_user.role in ("admin", "shop_manager"):
         return db.query(Order).order_by(Order.created_at.desc()).all()
     if current_user.role == "farmer":
         return (
@@ -148,6 +168,27 @@ def list_orders(
         .order_by(Order.created_at.desc())
         .all()
     )
+
+
+@router.patch("/{order_id}/payment", response_model=OrderRead)
+def confirm_order_payment(
+    order_id: int,
+    payment_in: OrderPaymentUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("admin", "shop_manager")),
+):
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.payment_status == PaymentStatus.PAID.value:
+        raise HTTPException(status_code=409, detail="Order payment is already marked paid")
+
+    if payment_in.payment_reference is not None:
+        order.payment_reference = payment_in.payment_reference.strip() or None
+    order.payment_status = PaymentStatus.PAID.value
+    db.commit()
+    db.refresh(order)
+    return order
 
 
 @router.get("/{order_id}", response_model=OrderRead)

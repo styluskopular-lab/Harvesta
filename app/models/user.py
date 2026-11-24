@@ -53,6 +53,7 @@ class User(Base):
     products = relationship("Product", back_populates="farmer", cascade="all, delete-orphan")
     orders = relationship("Order", back_populates="buyer", foreign_keys="Order.buyer_id")
     vans = relationship("DeliveryVan", back_populates="driver")
+    deliveries = relationship("Delivery", back_populates="driver", foreign_keys="Delivery.driver_id")
     managed_shops = relationship("Shop", back_populates="manager")
 
     def __repr__(self) -> str:

@@ -118,6 +118,17 @@ else:
 
     address = st.text_input("Delivery Address", placeholder="e.g. Nakawa, Kampala, Uganda")
     notes = st.text_area("Notes (optional)")
+    payment_method = st.selectbox(
+        "Payment method",
+        ["Cash on Delivery", "MTN / Airtel Mobile Money"],
+        key="checkout_payment_method",
+    )
+    payment_reference = None
+    if payment_method == "MTN / Airtel Mobile Money":
+        payment_reference = st.text_input(
+            "Mobile Money transaction reference (optional)",
+            key="checkout_payment_reference",
+        )
 
     col_c1, col_c2 = st.columns(2)
     with col_c1:
@@ -137,6 +148,12 @@ else:
                     "items": [{"product_id": i["product_id"], "quantity": i["quantity"]} for i in st.session_state.cart],
                     "delivery_address": address,
                     "notes": notes or None,
+                    "payment_method": (
+                        "mobile_money"
+                        if payment_method == "MTN / Airtel Mobile Money"
+                        else "cash_on_delivery"
+                    ),
+                    "payment_reference": payment_reference or None,
                 }
                 try:
                     r = httpx.post(

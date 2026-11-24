@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.core.database import engine, Base, SessionLocal
+from app.core.schema_updates import ensure_workflow_schema
 from app.api.v1 import auth, products, orders, farms, deliveries, shops, weather, veterinary, farm_records, farm_finance
 from app.services.marketplace_seed import seed_marketplace_if_empty
 
@@ -15,6 +16,7 @@ from app.models import *  # noqa: F401, F403
 async def lifespan(app: FastAPI):
     # Startup: create tables
     Base.metadata.create_all(bind=engine)
+    ensure_workflow_schema(engine)
     with SessionLocal() as db:
         seed_marketplace_if_empty(db)
     yield

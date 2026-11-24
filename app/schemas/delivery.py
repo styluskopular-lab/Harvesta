@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Literal
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -35,7 +35,9 @@ class DeliveryCreate(DeliveryBase):
 
 
 class DeliveryUpdate(BaseModel):
-    status: Optional[str] = None
+    status: Optional[
+        Literal["open", "assigned", "accepted", "picked_up", "in_transit", "delivered", "failed"]
+    ] = None
     van_id: Optional[int] = None
     pickup_time: Optional[datetime] = None
     estimated_delivery: Optional[datetime] = None
@@ -43,8 +45,25 @@ class DeliveryUpdate(BaseModel):
     notes: Optional[str] = None
 
 
+class DeliveryItemRead(BaseModel):
+    product_name: str
+    quantity: float
+    unit: str
+    pickup_district: str
+
+
 class DeliveryRead(DeliveryBase):
     id: int
+    driver_id: Optional[int] = None
+    driver_name: Optional[str] = None
+    driver_phone: Optional[str] = None
+    estimated_fee_ugx: int
+    pickup_district: str
+    delivery_district: str
+    items: List[DeliveryItemRead]
+    payment_method: str
+    payment_status: str
+    payment_reference: Optional[str] = None
     pickup_time: Optional[datetime] = None
     estimated_delivery: Optional[datetime] = None
     actual_delivery: Optional[datetime] = None
